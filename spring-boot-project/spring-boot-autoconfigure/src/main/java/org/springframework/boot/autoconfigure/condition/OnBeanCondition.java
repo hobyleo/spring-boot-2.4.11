@@ -16,21 +16,6 @@
 
 package org.springframework.boot.autoconfigure.condition;
 
-import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-
 import org.springframework.aop.scope.ScopedProxyUtils;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.HierarchicalBeanFactory;
@@ -45,21 +30,15 @@ import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.ConfigurationCondition;
 import org.springframework.core.Ordered;
 import org.springframework.core.ResolvableType;
-import org.springframework.core.annotation.MergedAnnotation;
+import org.springframework.core.annotation.*;
 import org.springframework.core.annotation.MergedAnnotation.Adapt;
-import org.springframework.core.annotation.MergedAnnotationCollectors;
-import org.springframework.core.annotation.MergedAnnotationPredicates;
-import org.springframework.core.annotation.MergedAnnotations;
-import org.springframework.core.annotation.Order;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 import org.springframework.core.type.MethodMetadata;
-import org.springframework.util.Assert;
-import org.springframework.util.ClassUtils;
-import org.springframework.util.CollectionUtils;
-import org.springframework.util.MultiValueMap;
-import org.springframework.util.ObjectUtils;
-import org.springframework.util.ReflectionUtils;
-import org.springframework.util.StringUtils;
+import org.springframework.util.*;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.*;
 
 /**
  * {@link Condition} that checks for the presence or absence of specific beans.
@@ -114,22 +93,33 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 	public ConditionOutcome getMatchOutcome(ConditionContext context, AnnotatedTypeMetadata metadata) {
 		ConditionMessage matchMessage = ConditionMessage.empty();
 		MergedAnnotations annotations = metadata.getAnnotations();
+
+		// 如果存在ConditionalOnBean注解
 		if (annotations.isPresent(ConditionalOnBean.class)) {
 			Spec<ConditionalOnBean> spec = new Spec<>(context, metadata, annotations, ConditionalOnBean.class);
 			MatchResult matchResult = getMatchingBeans(context, spec);
+
+			// 如果某个Bean不存在
 			if (!matchResult.isAllMatched()) {
 				String reason = createOnBeanNoMatchReason(matchResult);
 				return ConditionOutcome.noMatch(spec.message().because(reason));
 			}
+
+			// 所有Bean都存在
 			matchMessage = spec.message(matchMessage).found("bean", "beans").items(Style.QUOTE,
 					matchResult.getNamesOfAllMatches());
 		}
+
+		// 如果存在ConditionalOnSingleCandidate注解
 		if (metadata.isAnnotated(ConditionalOnSingleCandidate.class.getName())) {
 			Spec<ConditionalOnSingleCandidate> spec = new SingleCandidateSpec(context, metadata, annotations);
 			MatchResult matchResult = getMatchingBeans(context, spec);
+
+			// Bean不存在
 			if (!matchResult.isAllMatched()) {
 				return ConditionOutcome.noMatch(spec.message().didNotFind("any beans").atAll());
 			}
+			// 否则只能有一个Bean或一个主Bean
 			else if (!hasSingleAutowireCandidate(context.getBeanFactory(), matchResult.getNamesOfAllMatches(),
 					spec.getStrategy() == SearchStrategy.ALL)) {
 				return ConditionOutcome.noMatch(spec.message().didNotFind("a primary bean from beans")
@@ -138,14 +128,18 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 			matchMessage = spec.message(matchMessage).found("a primary bean from beans").items(Style.QUOTE,
 					matchResult.getNamesOfAllMatches());
 		}
+
+		// 存在ConditionalOnMissingBean注解
 		if (metadata.isAnnotated(ConditionalOnMissingBean.class.getName())) {
 			Spec<ConditionalOnMissingBean> spec = new Spec<>(context, metadata, annotations,
 					ConditionalOnMissingBean.class);
 			MatchResult matchResult = getMatchingBeans(context, spec);
+			// 有任意一个Bean存在，那就条件不匹配
 			if (matchResult.isAnyMatched()) {
 				String reason = createOnMissingBeanNoMatchReason(matchResult);
 				return ConditionOutcome.noMatch(spec.message().because(reason));
 			}
+			// 都不存在，则匹配
 			matchMessage = spec.message(matchMessage).didNotFind("any beans").atAll();
 		}
 		return ConditionOutcome.match(matchMessage);
