@@ -16,22 +16,8 @@
 
 package org.springframework.boot;
 
-import java.lang.reflect.Constructor;
-import java.security.AccessControlException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.CachedIntrospectionResults;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -63,26 +49,17 @@ import org.springframework.core.GenericTypeResolver;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.core.convert.ConversionService;
 import org.springframework.core.convert.support.ConfigurableConversionService;
-import org.springframework.core.env.CommandLinePropertySource;
-import org.springframework.core.env.CompositePropertySource;
-import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.core.env.Environment;
-import org.springframework.core.env.MutablePropertySources;
-import org.springframework.core.env.PropertySource;
-import org.springframework.core.env.SimpleCommandLinePropertySource;
-import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.*;
 import org.springframework.core.io.DefaultResourceLoader;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.SpringFactoriesLoader;
 import org.springframework.core.metrics.ApplicationStartup;
-import org.springframework.util.Assert;
-import org.springframework.util.ClassUtils;
-import org.springframework.util.CollectionUtils;
-import org.springframework.util.ObjectUtils;
-import org.springframework.util.ReflectionUtils;
-import org.springframework.util.StopWatch;
-import org.springframework.util.StringUtils;
+import org.springframework.util.*;
 import org.springframework.web.context.support.StandardServletEnvironment;
+
+import java.lang.reflect.Constructor;
+import java.security.AccessControlException;
+import java.util.*;
 
 /**
  * Class that can be used to bootstrap and launch a Spring application from a Java main
@@ -282,10 +259,23 @@ public class SpringApplication {
 		this.resourceLoader = resourceLoader;
 		Assert.notNull(primarySources, "PrimarySources must not be null");
 		this.primarySources = new LinkedHashSet<>(Arrays.asList(primarySources));
+
+		// 推断web应用类型
 		this.webApplicationType = WebApplicationType.deduceFromClasspath();
+
+		// 从"META-INF/spring.factories"中读取key为BootstrapRegistryInitializer类型的扩展点
+		// 初始化BootstrapRegistry，可以用来注册一些对象，这些对象可以用在从SpringBoot启动到Spring容器初始化完成的过程中
 		this.bootstrapRegistryInitializers = getBootstrapRegistryInitializersFromSpringFactories();
+
+		// 从"META-INF/spring.factories"中读取key为ApplicationContextInitializer类型的扩展点
+		// ApplicationContextInitializer是用来初始化Spring容器ApplicationContext对象的
 		setInitializers((Collection) getSpringFactoriesInstances(ApplicationContextInitializer.class));
+
+		// 从"META-INF/spring.factories"中读取key为ApplicationListener类型的扩展点
+		// ApplicationListener就是Spring中的监听器
 		setListeners((Collection) getSpringFactoriesInstances(ApplicationListener.class));
+
+		// 推断main()方法所在的类
 		this.mainApplicationClass = deduceMainApplicationClass();
 	}
 
@@ -323,29 +313,54 @@ public class SpringApplication {
 	public ConfigurableApplicationContext run(String... args) {
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
+
+		// 利用BootstrapRegistryInitializer初始化DefaultBootstrapContext对象
 		DefaultBootstrapContext bootstrapContext = createBootstrapContext();
 		ConfigurableApplicationContext context = null;
 		configureHeadlessProperty();
+
+		// 获取SpringApplicationRunListeners
 		SpringApplicationRunListeners listeners = getRunListeners(args);
+		// 触发SpringApplicationRunListener的starting()，默认情况下SpringBoot提供了一个EventPublishingRunListener
+		// EventPublishingRunListener会发布一个ApplicationContextInitializedEvent事件，程序员可以通过定义ApplicationListener来消费这个事件
 		listeners.starting(bootstrapContext, this.mainApplicationClass);
+
 		try {
+			// 创建Environment对象，包括：当前操作系统的环境变量、JVM的一些配置信息、-D方式所配置的JVM环境变量
 			ApplicationArguments applicationArguments = new DefaultApplicationArguments(args);
 			ConfigurableEnvironment environment = prepareEnvironment(listeners, bootstrapContext, applicationArguments);
 			configureIgnoreBeanInfo(environment);
+
+			// 打印banner
 			Banner printedBanner = printBanner(environment);
+
+			// 根据应用类型创建ApplicationContext
+			// SERVLET -> AnnotationConfigServletWebServerApplicationContext
+			// REACTIVE -> AnnotationConfigReactiveWebServerApplicationContext
+			// NONE -> AnnotationConfigApplicationContext
 			context = createApplicationContext();
 			context.setApplicationStartup(this.applicationStartup);
+
 			prepareContext(bootstrapContext, context, environment, listeners, applicationArguments, printedBanner);
+
+			// 调用ApplicationContext.refresh()
 			refreshContext(context);
+
 			afterRefresh(context, applicationArguments);
 			stopWatch.stop();
 			if (this.logStartupInfo) {
 				new StartupInfoLogger(this.mainApplicationClass).logStarted(getApplicationLog(), stopWatch);
 			}
+
+			// 发布ApplicationStartedEvent事件和AvailabilityChangeEvent事件
+			// AvailabilityChangeEvent事件表示状态变更状态，变更后的状态为LivenessState.CORRECT
 			listeners.started(context);
+
+			// 调用ApplicationRunner和CommandLineRunner的run方法
 			callRunners(context, applicationArguments);
 		}
 		catch (Throwable ex) {
+			// 上述过程抛异常了就触发SpringApplicationRunListener的failed()
 			handleRunFailure(context, ex, listeners);
 			throw new IllegalStateException(ex);
 		}
@@ -372,7 +387,13 @@ public class SpringApplication {
 		ConfigurableEnvironment environment = getOrCreateEnvironment();
 		configureEnvironment(environment, applicationArguments.getSourceArgs());
 		ConfigurationPropertySources.attach(environment);
+
+		// 触发SpringApplicationRunListener的environmentPrepared()
+		// 默认情况下会利用EventPublishingRunListener发布一个ApplicationEnvironmentPreparedEvent事件
+		// 默认情况下会有一个EnvironmentPostProcessorApplicationListener来消费这个事件
+		// 这个ApplicationListener接收到这个事件之后，就会解析application.properties、application.yml文件，并添加到Environment对象中去
 		listeners.environmentPrepared(bootstrapContext, environment);
+
 		DefaultPropertiesPropertySource.moveToEnd(environment);
 		bindToSpringApplication(environment);
 		if (!this.isCustomEnvironment) {
@@ -399,13 +420,28 @@ public class SpringApplication {
 			ApplicationArguments applicationArguments, Banner printedBanner) {
 		context.setEnvironment(environment);
 		postProcessApplicationContext(context);
+
+		// 利用ApplicationContextInitializer初始化Spring容器对象
+		// 默认情况下SpringBoot提供了多个ApplicationContextInitializer
+		// 0 = {SharedMetadataReaderFactoryContextInitializer@2275}
+		// 1 = {DelegatingApplicationContextInitializer@2276}
+		// 2 = {ContextIdApplicationContextInitializer@2277}
+		// 3 = {ConditionEvaluationReportLoggingListener@2278}
+		// 4 = {ConfigurationWarningsApplicationContextInitializer@2279}
+		// 5 = {RSocketPortInfoApplicationContextInitializer@2280}
+		// 6 = {ServerPortInfoApplicationContextInitializer@2281}
 		applyInitializers(context);
+
+		// 默认情况下会利用EventPublishingRunListener发布一个ApplicationContextInitializedEvent事件
+		// 默认情况下暂时没有ApplicationListener消费这个事件
 		listeners.contextPrepared(context);
+
 		bootstrapContext.close(context);
 		if (this.logStartupInfo) {
 			logStartupInfo(context.getParent() == null);
 			logStartupProfileInfo(context);
 		}
+
 		// Add boot specific singleton beans
 		ConfigurableListableBeanFactory beanFactory = context.getBeanFactory();
 		beanFactory.registerSingleton("springApplicationArguments", applicationArguments);
@@ -422,7 +458,11 @@ public class SpringApplication {
 		// Load the sources
 		Set<Object> sources = getAllSources();
 		Assert.notEmpty(sources, "Sources must not be empty");
+
+		// 将启动类作为配置类注册到Spring容器中
 		load(context, sources.toArray(new Object[0]));
+
+		// 默认情况下会利用EventPublishingRunListener发布一个ApplicationPreparedEvent事件
 		listeners.contextLoaded(context);
 	}
 

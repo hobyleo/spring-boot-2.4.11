@@ -16,8 +16,6 @@
 
 package org.springframework.boot.env;
 
-import java.util.List;
-
 import org.springframework.boot.ConfigurableBootstrapContext;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
@@ -28,6 +26,8 @@ import org.springframework.context.ApplicationEvent;
 import org.springframework.context.event.SmartApplicationListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
+
+import java.util.List;
 
 /**
  * {@link SmartApplicationListener} used to trigger {@link EnvironmentPostProcessor
@@ -96,6 +96,12 @@ public class EnvironmentPostProcessorApplicationListener implements SmartApplica
 	private void onApplicationEnvironmentPreparedEvent(ApplicationEnvironmentPreparedEvent event) {
 		ConfigurableEnvironment environment = event.getEnvironment();
 		SpringApplication application = event.getSpringApplication();
+		// 0 = {RandomValuePropertySourceEnvironmentPostProcessor@1828}
+		// 1 = {SystemEnvironmentPropertySourceEnvironmentPostProcessor@1829}
+		// 2 = {SpringApplicationJsonEnvironmentPostProcessor@1830}
+		// 3 = {CloudFoundryVcapEnvironmentPostProcessor@1831}
+		// 4 = {ConfigDataEnvironmentPostProcessor@1832}
+		// 5 = {DebugAgentEnvironmentPostProcessor@1833}
 		for (EnvironmentPostProcessor postProcessor : getEnvironmentPostProcessors(event.getBootstrapContext())) {
 			postProcessor.postProcessEnvironment(environment, application);
 		}

@@ -80,6 +80,8 @@ public class ConditionEvaluationReportLoggingListener
 	@Override
 	public void initialize(ConfigurableApplicationContext applicationContext) {
 		this.applicationContext = applicationContext;
+		// 添加ConditionEvaluationReportListener，它会负责接收ContextRefreshedEvent事件
+		// Spring容器一旦启动完毕就会触发ContextRefreshedEvent，ConditionEvaluationReportListener就会打印自动配置类的条件评估报告
 		applicationContext.addApplicationListener(new ConditionEvaluationReportListener());
 		if (applicationContext instanceof GenericApplicationContext) {
 			// Get the report early in case the context fails to load
