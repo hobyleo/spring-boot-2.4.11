@@ -16,20 +16,27 @@
 
 package smoketest.tomcat;
 
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.web.embedded.tomcat.TomcatConnectorCustomizer;
 import org.springframework.context.annotation.Bean;
+
+import javax.servlet.ServletContextEvent;
+import javax.servlet.ServletContextListener;
 
 @SpringBootApplication
 public class SampleTomcatApplication {
 
 	private static Log logger = LogFactory.getLog(SampleTomcatApplication.class);
+
+	@Bean
+	public TomcatConnectorCustomizer tomcatConnectorCustomizer() {
+		return connector -> {
+            connector.setPort(8888);
+        };
+    }
 
 	@Bean
 	protected ServletContextListener listener() {

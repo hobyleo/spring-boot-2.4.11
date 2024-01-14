@@ -16,11 +16,6 @@
 
 package org.springframework.boot.web.server;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
@@ -29,6 +24,11 @@ import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.util.LambdaSafe;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.util.Assert;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * {@link BeanPostProcessor} that applies all {@link WebServerFactoryCustomizer} beans
@@ -67,6 +67,11 @@ public class WebServerFactoryCustomizerBeanPostProcessor implements BeanPostProc
 
 	@SuppressWarnings("unchecked")
 	private void postProcessBeforeInitialization(WebServerFactory webServerFactory) {
+		// 0 = {TomcatWebSocketServletWebServerCustomizer@3365}
+		// 1 = {ServletWebServerFactoryCustomizer@3366}
+		// 2 = {TomcatServletWebServerFactoryCustomizer@3367}
+		// 3 = {TomcatWebServerFactoryCustomizer@3368}
+		// 4 = {HttpEncodingAutoConfiguration$LocaleCharsetMappingsCustomizer@3369}
 		LambdaSafe.callbacks(WebServerFactoryCustomizer.class, getCustomizers(), webServerFactory)
 				.withLogger(WebServerFactoryCustomizerBeanPostProcessor.class)
 				.invoke((customizer) -> customizer.customize(webServerFactory));
